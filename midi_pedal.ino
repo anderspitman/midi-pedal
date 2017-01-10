@@ -1,17 +1,14 @@
 #include <MIDI.h>
 
 
+const int ledPin =  13;
+const int buttonsCount = 2;
+const int inPins[buttonsCount] = {2, 3};
 
-// constants won't change. They're used here to
-// set pin numbers:
-const int buttonPin = 2;     // the number of the pushbutton pin
-const int ledPin =  13;      // the number of the LED pin
+int buttonStates[buttonsCount];
+int lastButtonStates[buttonsCount];
+unsigned long lastDebounceTimes[buttonsCount];
 
-// variables will change:
-int buttonState = 0;         // variable for reading the pushbutton status
-int lastButtonState = 0;
-
-unsigned long lastDebounceTime = 0;
 unsigned long debounceDelay = 2;
 
 MIDI_CREATE_DEFAULT_INSTANCE();
@@ -19,41 +16,91 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 void setup() {
   // initialize the LED pin as an output:
   pinMode(ledPin, OUTPUT);
-  // initialize the pushbutton pin as an input:
-  pinMode(buttonPin, INPUT);
+
+  for (int buttonIndex = 0; buttonIndex < buttonsCount; buttonIndex++) {
+    buttonStates[buttonIndex] = 0;
+    lastButtonStates[buttonIndex] = 0;
+    lastDebounceTimes[buttonIndex] = 0;
+    pinMode(inPins[buttonIndex], INPUT);
+  }
 
   MIDI.begin();
 }
 
 void loop() {
-  // read the state of the pushbutton value:
-  int reading = digitalRead(buttonPin);
 
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
+  for (int buttonIndex = 0; buttonIndex < buttonsCount; buttonIndex++) {
+    processButton(buttonIndex);
   }
-
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-
-    if (reading != buttonState) {
-      buttonState = reading;
-      
-      // check if the pushbutton is pressed.
-      // if it is, the buttonState is HIGH:
-      if (buttonState == HIGH) {
-        // turn LED on:
-        digitalWrite(ledPin, HIGH);
-  
-        MIDI.sendNoteOn(42, 127, 1);
-        
-      } else {
-        // turn LED off:
-        digitalWrite(ledPin, LOW);
-      }
-    }
-  }
-
-  lastButtonState = reading;
 
   MIDI.read();
 }
+
+void processButton(int buttonIndex) {
+  
+  if (buttonStateChanged(buttonIndex)) {
+    if (getButtonState(buttonIndex) == HIGH) {
+      digitalWrite(ledPin, HIGH);
+
+      //blinkNumberOfTimes(inPins[buttonIndex]);
+    
+      MIDI.sendNoteOn(42 + buttonIndex, 127, 1);
+          
+    }
+    else {
+      digitalWrite(ledPin, LOW);
+    }
+  } 
+}
+
+bool buttonStateChanged(int buttonIndex) {
+  int reading = digitalRead(inPins[buttonIndex]);
+  
+  if (reading != lastButtonStates[buttonIndex]) {
+    resetDebounceTimer(buttonIndex);
+  }
+  
+  if (debounceTimerExpired(buttonIndex)) {
+  
+    if (reading != getButtonState(buttonIndex)) {
+      setButtonState(buttonIndex, reading);
+
+      return true;
+    }
+  }
+
+  lastButtonStates[buttonIndex] = reading;
+
+  return false;
+}
+
+int getButtonState(int buttonIndex) {
+  return buttonStates[buttonIndex];
+}
+
+void setButtonState(int buttonIndex, int newState) {
+  buttonStates[buttonIndex] = newState;
+}
+
+void resetDebounceTimer(int buttonIndex) {
+  lastDebounceTimes[buttonIndex] = millis();
+}
+
+bool debounceTimerExpired(int buttonIndex) {
+  return timeInCurrentState(buttonIndex) > debounceDelay;
+}
+
+int timeInCurrentState(int buttonIndex) {
+  return millis() - lastDebounceTimes[buttonIndex];
+}
+
+// For debugging only. Uses delay so break real time.
+//void blinkNumberOfTimes(int numberOfTimes) {
+//  for (int i = 0; i < numberOfTimes; i++) {
+//    digitalWrite(ledPin, HIGH);
+//    delay(200);
+//    digitalWrite(ledPin, LOW);
+//    delay(200);
+//  }
+//}
+
